@@ -82,6 +82,6 @@ def main():
 
 
 if __name__ == "__main__":
-    print(0)
+    print(1)
     acc_user, acc_item, acc_user_test, acc_item_test = main()
 
