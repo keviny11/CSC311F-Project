@@ -8,6 +8,8 @@ import torch.utils.data
 
 import numpy as np
 import torch
+import sys
+import matplotlib.pyplot as plt
 
 
 def load_data(base_path="../data"):
@@ -70,14 +72,16 @@ class AutoEncoder(nn.Module):
         # Implement the function as described in the docstring.             #
         # Use sigmoid activations for f and g.                              #
         #####################################################################
-        out = inputs
+        sigmoid = nn.Sigmoid()
+        tmp = sigmoid(self.g(inputs))
+        out = sigmoid(self.h(tmp))
         #####################################################################
         #                       END OF YOUR CODE                            #
         #####################################################################
         return out
 
 
-def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
+def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data):
     """ Train the neural network, where the objective also includes
     a regularizer.
 
@@ -99,6 +103,9 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     optimizer = optim.SGD(model.parameters(), lr=lr)
     num_student = train_data.shape[0]
 
+    # For plotting
+    losses, accs = [], []
+
     for epoch in range(0, num_epoch):
         train_loss = 0.
 
@@ -113,7 +120,7 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
             nan_mask = np.isnan(train_data[user_id].unsqueeze(0).numpy())
             target[0][nan_mask] = output[0][nan_mask]
 
-            loss = torch.sum((output - target) ** 2.)
+            loss = torch.sum((output - target) ** 2.) + 0.5*lamb*model.get_weight_norm() # add reg term
             loss.backward()
 
             train_loss += loss.item()
@@ -122,6 +129,25 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
         valid_acc = evaluate(model, zero_train_data, valid_data)
         print("Epoch: {} \tTraining Cost: {:.6f}\t "
               "Valid Acc: {}".format(epoch, train_loss, valid_acc))
+
+        # Store values for plotting
+        losses.append(train_loss)
+        accs.append(valid_acc)
+
+    plt.subplot(1, 2, 1)
+    plt.plot(np.array(range(num_epoch)), losses)
+    plt.title("Loss vs Epochs")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.subplot(1, 2, 2)
+    plt.plot(np.array(range(num_epoch)), accs)
+    plt.title("Accuracy vs Epochs")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.show()
+
+    print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -156,22 +182,40 @@ def evaluate(model, train_data, valid_data):
 def main():
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
 
+    # Examine data
+    print(train_matrix, train_matrix.shape, zero_train_matrix.shape,\
+          len(valid_data['user_id']),\
+          len(valid_data['question_id']),\
+          len(valid_data['is_correct']), sep="\n")
+    # sys.exit(0)
+
     #####################################################################
     # TODO:                                                             #
     # Try out 5 different k and select the best k using the             #
     # validation set.                                                   #
     #####################################################################
     # Set model hyperparameters.
-    k = None
-    model = None
+
+    # k = 10: 67.60%
+    # k = 50: 68.33%
+    # k = 100: 68.50%
+    # k = 200: 68.34%
+    # k = 500: 67.33%
+    k = 100
+    model = AutoEncoder(1774, k=k)
 
     # Set optimization hyperparameters.
-    lr = None
-    num_epoch = None
-    lamb = None
+    lr = 0.01 # options explored: 0.1, 0.01, 0.005
+    num_epoch = 35
+
+    # lamb = 0.001: 68.90%(valid), 67.88(test)
+    # lamb = 0.01: 68.25%(valid)
+    # lamb = 0.1: 68.36%(valid)
+    # lamb = 1: 62.51%(valid)
+    lamb = 0
 
     train(model, lr, lamb, train_matrix, zero_train_matrix,
-          valid_data, num_epoch)
+          valid_data, num_epoch, test_data)
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
