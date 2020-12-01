@@ -81,7 +81,7 @@ class AutoEncoder(nn.Module):
         return out
 
 
-def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data):
+def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data, out=False):
     """ Train the neural network, where the objective also includes
     a regularizer.
 
@@ -94,7 +94,7 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
     :param num_epoch: int
     :return: None
     """
-    # TODO: Add a regularizer to the cost function. 
+    # TODO: Add a regularizer to the cost function.
     
     # Tell PyTorch you are training the model.
     model.train()
@@ -126,27 +126,28 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
             train_loss += loss.item()
             optimizer.step()
 
-        valid_acc = evaluate(model, zero_train_data, valid_data)
-        print("Epoch: {} \tTraining Cost: {:.6f}\t "
-              "Valid Acc: {}".format(epoch, train_loss, valid_acc))
+        if out:
+            valid_acc = evaluate(model, zero_train_data, valid_data)
+            print("Epoch: {} \tTraining Cost: {:.6f}\t "
+                  "Valid Acc: {}".format(epoch, train_loss, valid_acc))
 
-        # Store values for plotting
-        losses.append(train_loss)
-        accs.append(valid_acc)
+            # Store values for plotting
+            losses.append(train_loss)
+            accs.append(valid_acc)
+    if out:
+        plt.subplot(1, 2, 1)
+        plt.plot(np.array(range(num_epoch)), losses)
+        plt.title("Loss vs Epochs")
+        plt.xlabel("Epochs")
+        plt.ylabel("Loss")
+        plt.subplot(1, 2, 2)
+        plt.plot(np.array(range(num_epoch)), accs)
+        plt.title("Accuracy vs Epochs")
+        plt.xlabel("Epochs")
+        plt.ylabel("Accuracy")
+        plt.show()
 
-    plt.subplot(1, 2, 1)
-    plt.plot(np.array(range(num_epoch)), losses)
-    plt.title("Loss vs Epochs")
-    plt.xlabel("Epochs")
-    plt.ylabel("Loss")
-    plt.subplot(1, 2, 2)
-    plt.plot(np.array(range(num_epoch)), accs)
-    plt.title("Accuracy vs Epochs")
-    plt.xlabel("Epochs")
-    plt.ylabel("Accuracy")
-    plt.show()
-
-    print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
+        print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
 
     #####################################################################
     #                       END OF YOUR CODE                            #

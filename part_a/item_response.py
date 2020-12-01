@@ -160,7 +160,7 @@ def main():
         plt.ylabel('Negative log-likelihood')
         plt.xlabel('Number of Iteration')
         plt.legend(['Training', 'Validation'], loc='upper right')
-         # plt.xticks(np.arange(1, 21, 1))
+        # plt.xticks(np.arange(1, 21, 1))
         plt.show()
     #####################################################################
     #                       END OF YOUR CODE                            #
@@ -182,17 +182,17 @@ if __name__ == "__main__":
     t,b,t_acc, v_acc, t_neg, v_neg, prob_t, prob_v, final_val_acc, final_test_acc  = main()
     import matplotlib.pyplot as plt
 
-     plt.figure()
-     # choose five questions
-     for i in [10,20,30,40,50]:
-         x = t - b[i]
-         prob = sigmoid(x)
-         plt.scatter(t, prob,s=10.)
-     plt.title('Negative log-likelihood')
-     plt.ylabel('Probability of correct response')
-     plt.xlabel('Theta')
-     plt.legend(['Question 1', 'Question 2', 'Question 3', 'Question 4', 'Question 5'], loc='upper right')
-     plt.show()
+    plt.figure()
+    # choose five questions
+    for i in [10,20,30,40,50]:
+        x = t - b[i]
+        prob = sigmoid(x)
+        plt.scatter(t, prob,s=10.)
+    plt.title('Negative log-likelihood')
+    plt.ylabel('Probability of correct response')
+    plt.xlabel('Theta')
+    plt.legend(['Question 1', 'Question 2', 'Question 3', 'Question 4', 'Question 5'], loc='upper right')
+    plt.show()
 
 
 
