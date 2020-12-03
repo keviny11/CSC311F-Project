@@ -34,6 +34,8 @@ def sample_data(train_data):
     data["user_id"] = [train_data["user_id"][i] for i in rand_idx]
     data["question_id"] = [train_data["question_id"][i] for i in rand_idx]
     data["is_correct"] = [train_data["is_correct"][i] for i in rand_idx]
+    print(len(set(data["user_id"])), len(data["user_id"]))
+    sys.exit(0)
     return data
 
 def knn(train_matrix, test_data, k):
@@ -84,11 +86,12 @@ def nn(train_matrix, test_data, lr, epochs, lamb):
     return predictions
 
 def evaluate(predictions, test_data):
+    threshold = 0.5
     correct = 0
     for i, v in enumerate(predictions):
-        if v >= 0.5 and test_data["is_correct"][i]:
+        if v >= threshold and test_data["is_correct"][i]:
             correct += 1
-        if v < 0.5 and not test_data["is_correct"][i]:
+        if v < threshold and not test_data["is_correct"][i]:
             correct += 1
     return correct / len(predictions)
 
