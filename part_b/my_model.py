@@ -50,7 +50,8 @@ class AutoEncoder(nn.Module):
 
         # Define linear functions.
         self.g = nn.Linear(num_question, k)
-        self.h = nn.Linear(k, num_question)
+        self.f = nn.Linear(k, 64)
+        self.h = nn.Linear(64, num_question)
 
     def get_weight_norm(self):
         """ Return ||W^1|| + ||W^2||.
@@ -58,8 +59,9 @@ class AutoEncoder(nn.Module):
         :return: float
         """
         g_w_norm = torch.norm(self.g.weight, 2)
+        f_w_norm = torch.norm(self.f.weight, 2)
         h_w_norm = torch.norm(self.h.weight, 2)
-        return g_w_norm + h_w_norm
+        return g_w_norm + h_w_norm + f_w_norm
 
     def forward(self, inputs):
         """ Return a forward pass given inputs.
@@ -67,21 +69,14 @@ class AutoEncoder(nn.Module):
         :param inputs: user vector.
         :return: user vector.
         """
-        #####################################################################
-        # TODO:                                                             #
-        # Implement the function as described in the docstring.             #
-        # Use sigmoid activations for f and g.                              #
-        #####################################################################
         sigmoid = nn.Sigmoid()
         tmp = sigmoid(self.g(inputs))
+        tmp = sigmoid(self.f(tmp))
         out = sigmoid(self.h(tmp))
-        #####################################################################
-        #                       END OF YOUR CODE                            #
-        #####################################################################
         return out
 
 
-def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data, out=False):
+def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data, boost_freq, out=False):
     """ Train the neural network, where the objective also includes
     a regularizer.
 
@@ -126,6 +121,25 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
             train_loss += loss.item()
             optimizer.step()
 
+        if epoch % boost_freq == 0:
+            failed = extract_failed(model, train_data, zero_train_data, int(train_data.shape[0] / 3))
+            for user_id in failed:
+                inputs = Variable(zero_train_data[user_id]).unsqueeze(0)
+                target = inputs.clone()
+
+                optimizer.zero_grad()
+                output = model(inputs)
+
+                # Mask the target to only compute the gradient of valid entries.
+                nan_mask = np.isnan(train_data[user_id].unsqueeze(0).numpy())
+                target[0][nan_mask] = output[0][nan_mask]
+
+                loss = torch.sum((output - target) ** 2.) + 0.5 * lamb * model.get_weight_norm()  # add reg term
+                loss.backward()
+
+                train_loss += loss.item()
+                optimizer.step()
+
         if out:
             valid_acc = evaluate(model, zero_train_data, valid_data)
             print("Epoch: {} \tTraining Cost: {:.6f}\t "
@@ -134,24 +148,47 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
             # Store values for plotting
             losses.append(train_loss)
             accs.append(valid_acc)
+
     if out:
-        plt.subplot(1, 2, 1)
-        plt.plot(np.array(range(num_epoch)), losses)
-        plt.title("Loss vs Epochs")
-        plt.xlabel("Epochs")
-        plt.ylabel("Loss")
-        plt.subplot(1, 2, 2)
-        plt.plot(np.array(range(num_epoch)), accs)
-        plt.title("Accuracy vs Epochs")
-        plt.xlabel("Epochs")
-        plt.ylabel("Accuracy")
-        plt.show()
+        # plt.subplot(1, 2, 1)
+        # plt.plot(np.array(range(num_epoch)), losses)
+        # plt.title("Loss vs Epochs")
+        # plt.xlabel("Epochs")
+        # plt.ylabel("Loss")
+        # plt.subplot(1, 2, 2)
+        # plt.plot(np.array(range(num_epoch)), accs)
+        # plt.title("Accuracy vs Epochs")
+        # plt.xlabel("Epochs")
+        # plt.ylabel("Accuracy")
+        # plt.show()
 
         print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
 
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+def extract_failed(model, train_data, zero_train_data, n):
+    model.eval()
+
+    score = [] # store the indices of those
+
+    for j, v in enumerate(zero_train_data):
+        inputs = Variable(v).unsqueeze(0)
+        output = model(inputs)
+
+        inputs_ = inputs.detach().numpy().tolist()[0]
+
+        output_ = output.detach().numpy().tolist()[0]
+
+        total, correct = 0, 0
+        for i in range(len(inputs_)):
+            if not np.isnan(train_data[j][i]):
+                if (inputs_[i] >= 0.5) == output_[i]:
+                    correct += 1
+                total += 1
+        score.append(correct/total**2)
+
+    # score = np.array(score)
+    # print(score[score < 1])
+
+    return np.argsort(score)[:n]
 
 
 def evaluate(model, train_data, valid_data):
@@ -179,22 +216,32 @@ def evaluate(model, train_data, valid_data):
         total += 1
     return correct / float(total)
 
+def sample_matrix(train_data, zero_train_data):
+    rand_mat_idx = np.random.randint(train_data.shape[0], size=train_data.shape[0])
+    return train_data[rand_mat_idx, :], zero_train_data[rand_mat_idx, :]
+
+def evaluate_bagging(models, train_data, valid_data):
+    total = 0
+    correct = 0
+
+    for i, u in enumerate(valid_data["user_id"]):
+        output = None
+        inputs = Variable(train_data[u]).unsqueeze(0)
+        for model in models:
+            output = model(inputs).detach().numpy()[0] if output is None else output + model(inputs).detach().numpy()[0]
+        output = output / len(models)
+
+        guess = output[valid_data["question_id"][i]] >= 0.5
+        if guess == valid_data["is_correct"][i]:
+            correct += 1
+        total += 1
+    return correct / float(total)
+
+
 
 def main():
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
 
-    # Examine data
-    print(train_matrix, train_matrix.shape, zero_train_matrix.shape, \
-          len(valid_data['user_id']), \
-          len(valid_data['question_id']), \
-          len(valid_data['is_correct']), sep="\n")
-    # sys.exit(0)
-
-    #####################################################################
-    # TODO:                                                             #
-    # Try out 5 different k and select the best k using the             #
-    # validation set.                                                   #
-    #####################################################################
     # Set model hyperparameters.
 
     # k = 10: 67.60%
@@ -203,24 +250,30 @@ def main():
     # k = 200: 68.34%
     # k = 500: 67.33%
     k = 100
-    model = AutoEncoder(1774, k=k)
 
     # Set optimization hyperparameters.
-    lr = 0.01  # options explored: 0.1, 0.01, 0.005
-    num_epoch = 35
+    lr = 0.05  # options explored: 0.1, 0.01, 0.005
+    num_epoch = 30
 
     # lamb = 0.001: 68.90%(valid), 67.88(test)
     # lamb = 0.01: 68.25%(valid)
     # lamb = 0.1: 68.36%(valid)
     # lamb = 1: 62.51%(valid)
-    lamb = 0
+    lamb = 0.001
 
-    train(model, lr, lamb, train_matrix, zero_train_matrix,
-          valid_data, num_epoch, test_data)
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    models = []
 
+    for i in range(3):
+        model = AutoEncoder(1774, k=k)
+
+        train_matrix_, zero_train_matrix_ = sample_matrix(train_matrix, zero_train_matrix)
+
+        train(model, lr, lamb, train_matrix_, zero_train_matrix_,
+              valid_data, num_epoch, test_data, 5)
+
+        models.append(model)
+
+    print(evaluate_bagging(models, zero_train_matrix, valid_data))
 
 if __name__ == "__main__":
     main()
