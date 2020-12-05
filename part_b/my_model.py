@@ -40,7 +40,7 @@ def load_data(base_path="../data"):
 
 
 class AutoEncoder(nn.Module):
-    def __init__(self, num_question, k=100):
+    def __init__(self, num_question, k=64):
         """ Initialize a class AutoEncoder.
 
         :param num_question: int
@@ -50,8 +50,9 @@ class AutoEncoder(nn.Module):
 
         # Define linear functions.
         self.g = nn.Linear(num_question, k)
-        self.f = nn.Linear(k, 64)
-        self.h = nn.Linear(64, num_question)
+        self.f = nn.Linear(k, 32)
+        self.e = nn.Linear(32, k)
+        self.h = nn.Linear(k, num_question)
 
     def get_weight_norm(self):
         """ Return ||W^1|| + ||W^2||.
@@ -60,8 +61,9 @@ class AutoEncoder(nn.Module):
         """
         g_w_norm = torch.norm(self.g.weight, 2)
         f_w_norm = torch.norm(self.f.weight, 2)
+        e_w_norm = torch.norm(self.e.weight, 2)
         h_w_norm = torch.norm(self.h.weight, 2)
-        return g_w_norm + h_w_norm + f_w_norm
+        return g_w_norm + h_w_norm + e_w_norm + f_w_norm
 
     def forward(self, inputs):
         """ Return a forward pass given inputs.
@@ -72,11 +74,12 @@ class AutoEncoder(nn.Module):
         sigmoid = nn.Sigmoid()
         tmp = sigmoid(self.g(inputs))
         tmp = sigmoid(self.f(tmp))
+        tmp = sigmoid(self.e(tmp))
         out = sigmoid(self.h(tmp))
         return out
 
 
-def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data, boost_freq, out=False):
+def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data, boost_freq, out=True):
     """ Train the neural network, where the objective also includes
     a regularizer.
 
@@ -163,7 +166,7 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
         # plt.show()
 
         print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
-
+    return losses, accs
 def extract_failed(model, train_data, zero_train_data, n):
     model.eval()
 
@@ -249,7 +252,7 @@ def main():
     # k = 100: 68.50%
     # k = 200: 68.34%
     # k = 500: 67.33%
-    k = 100
+    k = 64
 
     # Set optimization hyperparameters.
     lr = 0.05  # options explored: 0.1, 0.01, 0.005
@@ -263,17 +266,22 @@ def main():
 
     models = []
 
-    for i in range(3):
-        model = AutoEncoder(1774, k=k)
+    # for i in range(3):
+    #     model = AutoEncoder(1774, k=k)
+    #
+    #     # train_matrix_, zero_train_matrix_ = sample_matrix(train_matrix, zero_train_matrix)
+    #
+    #     # train(model, lr, lamb, train_matrix_, zero_train_matrix_, valid_data, num_epoch, test_data, 5)
+    #
+    #     models.append(model)
+    model = AutoEncoder(1774, k=k)
+    losses, accs = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data, 5)
 
-        train_matrix_, zero_train_matrix_ = sample_matrix(train_matrix, zero_train_matrix)
-
-        train(model, lr, lamb, train_matrix_, zero_train_matrix_,
-              valid_data, num_epoch, test_data, 5)
-
-        models.append(model)
-
-    print(evaluate_bagging(models, zero_train_matrix, valid_data))
+    # print(evaluate_bagging(models, zero_train_matrix, valid_data))
+    return losses, accs
 
 if __name__ == "__main__":
-    main()
+    losses, accs = main()
+    # k= 100, inner = 64, epoch = 30, lr = 0.05, lamb = 0.001, val 69.24, test 69.7%
+    # k= 256, inner = 128, epoch = 30, lr = 0.05, lamb = 0.001, val 69.00, test 69.06%
+    # k= 64, inner = 32, epoch = 30, lr = 0.05, lamb = 0.001, val 69.26, test 70.22%
