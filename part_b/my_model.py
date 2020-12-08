@@ -49,10 +49,10 @@ class AutoEncoder(nn.Module):
         super(AutoEncoder, self).__init__()
 
         # Define linear functions.
-        self.g = nn.Linear(num_question, k)
-        self.f = nn.Linear(k, 32)
-        self.e = nn.Linear(32, k)
-        self.h = nn.Linear(k, num_question)
+        self.g = nn.Linear(num_question, 128)
+        self.f = nn.Linear(128, k)
+        self.e = nn.Linear(k, 128)
+        self.h = nn.Linear(128, num_question)
 
     def get_weight_norm(self):
         """ Return ||W^1|| + ||W^2||.
@@ -79,7 +79,7 @@ class AutoEncoder(nn.Module):
         return out
 
 
-def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data, boost_freq, out=True):
+def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data, out=True):
     """ Train the neural network, where the objective also includes
     a regularizer.
 
@@ -124,75 +124,29 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
             train_loss += loss.item()
             optimizer.step()
 
-        if epoch % boost_freq == 0:
-            failed = extract_failed(model, train_data, zero_train_data, int(train_data.shape[0] / 3))
-            for user_id in failed:
-                inputs = Variable(zero_train_data[user_id]).unsqueeze(0)
-                target = inputs.clone()
+        valid_acc = evaluate(model, zero_train_data, valid_data)
+        print("Epoch: {} \tTraining Cost: {:.6f}\t "
+              "Valid Acc: {}".format(epoch, train_loss, valid_acc))
 
-                optimizer.zero_grad()
-                output = model(inputs)
+        # Store values for plotting
+        losses.append(train_loss)
+        accs.append(valid_acc)
 
-                # Mask the target to only compute the gradient of valid entries.
-                nan_mask = np.isnan(train_data[user_id].unsqueeze(0).numpy())
-                target[0][nan_mask] = output[0][nan_mask]
+    # plt.subplot(1, 2, 1)
+    # plt.plot(np.array(range(num_epoch)), losses)
+    # plt.title("Loss vs Epochs")
+    # plt.xlabel("Epochs")
+    # plt.ylabel("Loss")
+    # plt.subplot(1, 2, 2)
+    # plt.plot(np.array(range(num_epoch)), accs)
+    # plt.title("Accuracy vs Epochs")
+    # plt.xlabel("Epochs")
+    # plt.ylabel("Accuracy")
+    # plt.show()
 
-                loss = torch.sum((output - target) ** 2.) + 0.5 * lamb * model.get_weight_norm()  # add reg term
-                loss.backward()
+    print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
 
-                train_loss += loss.item()
-                optimizer.step()
-
-        if out:
-            valid_acc = evaluate(model, zero_train_data, valid_data)
-            print("Epoch: {} \tTraining Cost: {:.6f}\t "
-                  "Valid Acc: {}".format(epoch, train_loss, valid_acc))
-
-            # Store values for plotting
-            losses.append(train_loss)
-            accs.append(valid_acc)
-
-    if out:
-        # plt.subplot(1, 2, 1)
-        # plt.plot(np.array(range(num_epoch)), losses)
-        # plt.title("Loss vs Epochs")
-        # plt.xlabel("Epochs")
-        # plt.ylabel("Loss")
-        # plt.subplot(1, 2, 2)
-        # plt.plot(np.array(range(num_epoch)), accs)
-        # plt.title("Accuracy vs Epochs")
-        # plt.xlabel("Epochs")
-        # plt.ylabel("Accuracy")
-        # plt.show()
-
-        print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
     return losses, accs
-def extract_failed(model, train_data, zero_train_data, n):
-    model.eval()
-
-    score = [] # store the indices of those
-
-    for j, v in enumerate(zero_train_data):
-        inputs = Variable(v).unsqueeze(0)
-        output = model(inputs)
-
-        inputs_ = inputs.detach().numpy().tolist()[0]
-
-        output_ = output.detach().numpy().tolist()[0]
-
-        total, correct = 0, 0
-        for i in range(len(inputs_)):
-            if not np.isnan(train_data[j][i]):
-                if (inputs_[i] >= 0.5) == output_[i]:
-                    correct += 1
-                total += 1
-        score.append(correct/total**2)
-
-    # score = np.array(score)
-    # print(score[score < 1])
-
-    return np.argsort(score)[:n]
-
 
 def evaluate(model, train_data, valid_data):
     """ Evaluate the valid_data on the current model.
@@ -219,29 +173,6 @@ def evaluate(model, train_data, valid_data):
         total += 1
     return correct / float(total)
 
-def sample_matrix(train_data, zero_train_data):
-    rand_mat_idx = np.random.randint(train_data.shape[0], size=train_data.shape[0])
-    return train_data[rand_mat_idx, :], zero_train_data[rand_mat_idx, :]
-
-def evaluate_bagging(models, train_data, valid_data):
-    total = 0
-    correct = 0
-
-    for i, u in enumerate(valid_data["user_id"]):
-        output = None
-        inputs = Variable(train_data[u]).unsqueeze(0)
-        for model in models:
-            output = model(inputs).detach().numpy()[0] if output is None else output + model(inputs).detach().numpy()[0]
-        output = output / len(models)
-
-        guess = output[valid_data["question_id"][i]] >= 0.5
-        if guess == valid_data["is_correct"][i]:
-            correct += 1
-        total += 1
-    return correct / float(total)
-
-
-
 def main():
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
 
@@ -256,7 +187,7 @@ def main():
 
     # Set optimization hyperparameters.
     lr = 0.05  # options explored: 0.1, 0.01, 0.005
-    num_epoch = 30
+    num_epoch = 25
 
     # lamb = 0.001: 68.90%(valid), 67.88(test)
     # lamb = 0.01: 68.25%(valid)
@@ -266,18 +197,9 @@ def main():
 
     models = []
 
-    # for i in range(3):
-    #     model = AutoEncoder(1774, k=k)
-    #
-    #     # train_matrix_, zero_train_matrix_ = sample_matrix(train_matrix, zero_train_matrix)
-    #
-    #     # train(model, lr, lamb, train_matrix_, zero_train_matrix_, valid_data, num_epoch, test_data, 5)
-    #
-    #     models.append(model)
     model = AutoEncoder(1774, k=k)
-    losses, accs = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data, 5)
+    losses, accs = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data)
 
-    # print(evaluate_bagging(models, zero_train_matrix, valid_data))
     return losses, accs
 
 if __name__ == "__main__":
