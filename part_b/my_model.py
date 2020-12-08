@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import sys
 import matplotlib.pyplot as plt
+from part_b.k_means_category import k_means_category
 
 
 def load_data(base_path="../data"):
@@ -79,7 +80,7 @@ class AutoEncoder(nn.Module):
         return out
 
 
-def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data, out=True):
+def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data):
     """ Train the neural network, where the objective also includes
     a regularizer.
 
@@ -146,9 +147,9 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
 
     print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
 
-    return losses, accs
+    return evaluate(model, zero_train_data, test_data, out=True)
 
-def evaluate(model, train_data, valid_data):
+def evaluate(model, train_data, valid_data, out=False):
     """ Evaluate the valid_data on the current model.
 
     :param model: Module
@@ -163,15 +164,32 @@ def evaluate(model, train_data, valid_data):
     total = 0
     correct = 0
 
+    predictions = []
+
     for i, u in enumerate(valid_data["user_id"]):
         inputs = Variable(train_data[u]).unsqueeze(0)
         output = model(inputs)
 
-        guess = output[0][valid_data["question_id"][i]].item() >= 0.5
+        probability = output[0][valid_data["question_id"][i]].item()
+        if out:
+            predictions.append(probability)
+
+        guess = probability >= 0.5
         if guess == valid_data["is_correct"][i]:
             correct += 1
         total += 1
+
+    if out: # output prediction instead of accuracy if out=True
+        return predictions
     return correct / float(total)
+
+def eval_overall(predictions, valid_data):
+    correct = 0
+    for i, t in enumerate(valid_data["is_correct"]):
+        guess = predictions[i] >= 0.5
+        if guess == t:
+            correct += 1
+    print(correct/len(predictions))
 
 def main():
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
@@ -198,12 +216,19 @@ def main():
     models = []
 
     model = AutoEncoder(1774, k=k)
-    losses, accs = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data)
+    pred_nn = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data)
+    pred_kmeans, acc = k_means_category(6, test_data)
+    bagged_pred = []
+    for i, v in enumerate(pred_kmeans):
+        if v != 0:
+            bagged_pred.append(0.5*v+0.5*pred_nn[i])
+        else:
+            bagged_pred.append(pred_nn[i])
+    eval_overall(bagged_pred, test_data)
 
-    return losses, accs
 
 if __name__ == "__main__":
-    losses, accs = main()
+    main()
     # k= 100, inner = 64, epoch = 30, lr = 0.05, lamb = 0.001, val 69.24, test 69.7%
     # k= 256, inner = 128, epoch = 30, lr = 0.05, lamb = 0.001, val 69.00, test 69.06%
     # k= 64, inner = 32, epoch = 30, lr = 0.05, lamb = 0.001, val 69.26, test 70.22%

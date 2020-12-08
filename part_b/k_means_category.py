@@ -4,7 +4,7 @@ from utils import *
 from sklearn.cluster import KMeans
 import sys
 
-def k_means_category(clster):
+def gen_probability(clster):
 
     train_m = load_train_sparse("../data")
     q_meta_cat = q_meta_k_means(clster)
@@ -21,8 +21,7 @@ def k_means_category(clster):
                 correct[q_meta_cat[i]] += 1
             total[q_meta_cat[i]] += 1
 
-        guess = np.random.uniform() # if we have no data, guess
-        p = [correct[i]/total[i] if total[i] != 0 else guess for i in range(len(total))]
+        p = [correct[i]/total[i] if total[i] != 0 else 0 for i in range(len(total))]
 
         probability = []
         for i, _ in enumerate(r):
@@ -43,22 +42,16 @@ def q_meta_k_means(clstr):
     kmeans = KMeans(n_clusters=clstr, random_state=0).fit(q_meta)
     return kmeans.labels_
 
-def evaluate(predictions, test):
-
+def k_means_category(k, test):
+    predictions = gen_probability(k)
+    predictions_ = []
     total, correct = 0, 0
     for i, u in enumerate(test["user_id"]):
 
+        predictions_.append(predictions[u][test["question_id"][i]])
         guess = predictions[u][test["question_id"][i]] >= 0.5
         if guess == test["is_correct"][i]:
             correct += 1
         total += 1
-    return correct / float(total)
 
-if __name__ == "__main__":
-    valid_data = load_train_csv("../data")
-    test_data = load_public_test_csv("../data")
-    pred = k_means_category(10)
-    acc_v = evaluate(pred, valid_data)
-    acc_t = evaluate(pred, test_data)
-    print("Valid acc is: ", acc_v)
-    print("Test acc is: ", acc_t)
+    return predictions_, correct / float(total)
