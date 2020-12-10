@@ -34,8 +34,6 @@ def sample_data(train_data):
     data["user_id"] = [train_data["user_id"][i] for i in rand_idx]
     data["question_id"] = [train_data["question_id"][i] for i in rand_idx]
     data["is_correct"] = [train_data["is_correct"][i] for i in rand_idx]
-    print(len(set(data["user_id"])), len(data["user_id"]))
-    sys.exit(0)
     return data
 
 def knn(train_matrix, test_data, k):
