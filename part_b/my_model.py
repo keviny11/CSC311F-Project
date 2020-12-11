@@ -11,6 +11,8 @@ import torch
 import sys
 import matplotlib.pyplot as plt
 from part_b.k_means_category import k_means_category
+from part_b.cosine_similarity import cosine_similarity_students
+from part_b.random_forest import random_forest
 
 
 def load_data(base_path="../data"):
@@ -50,10 +52,10 @@ class AutoEncoder(nn.Module):
         super(AutoEncoder, self).__init__()
 
         # Define linear functions.
-        self.g = nn.Linear(num_question, 128)
-        self.f = nn.Linear(128, k)
-        self.e = nn.Linear(k, 128)
-        self.h = nn.Linear(128, num_question)
+        self.g = nn.Linear(num_question, 64)
+        self.f = nn.Linear(64, k)
+        self.e = nn.Linear(k, 64)
+        self.h = nn.Linear(64, num_question)
 
     def get_weight_norm(self):
         """ Return ||W^1|| + ||W^2||.
@@ -201,11 +203,11 @@ def main():
     # k = 100: 68.50%
     # k = 200: 68.34%
     # k = 500: 67.33%
-    k = 64
+    k = 32
 
     # Set optimization hyperparameters.
     lr = 0.05  # options explored: 0.1, 0.01, 0.005
-    num_epoch = 25
+    num_epoch = 30
 
     # lamb = 0.001: 68.90%(valid), 67.88(test)
     # lamb = 0.01: 68.25%(valid)
@@ -217,14 +219,29 @@ def main():
 
     model = AutoEncoder(1774, k=k)
     pred_nn = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data)
-    pred_kmeans, acc = k_means_category(6, test_data)
+
+    # Bagging
     bagged_pred = []
-    for i, v in enumerate(pred_kmeans):
-        if v != 0:
-            bagged_pred.append(0.5*v+0.5*pred_nn[i])
-        else:
-            bagged_pred.append(pred_nn[i])
-    eval_overall(bagged_pred, test_data)
+
+    # pred_CS = cosine_similarity_students(threshold=1.0, top=2)
+    # for i, v in enumerate(pred_CS):
+    #     if v is None:
+    #         bagged_pred.append(pred_nn[i])
+    #     else:
+    #         bagged_pred.append(0.7*v+0.3*pred_nn[i])
+
+    # pred_kmeans, acc = k_means_category(200, test_data)
+    # for i, v in enumerate(pred_kmeans):
+    #     if v != 0:
+    #         bagged_pred.append(0.4*v+0.6*pred_nn[i])
+    #     else:
+    #         bagged_pred.append(pred_nn[i])
+
+    # pred_RF = random_forest()
+    # for i, v in enumerate(pred_RF):
+    #     bagged_pred.append(0.5*pred_RF[i]+0.5*pred_nn[i])
+    #
+    # eval_overall(bagged_pred, test_data)
 
 
 if __name__ == "__main__":

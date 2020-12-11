@@ -28,19 +28,23 @@ def random_forest():
         clf.fit(X, y)
         RF_trees.append(clf)
 
-    evaluate_RF(RF_trees, q_meta)
+    return evaluate_RF(RF_trees, q_meta)
 
 def evaluate_RF(RF_trees, q_meta):
-    valid_data = load_valid_csv("../data")
+    # valid_data = load_valid_csv("../data")
     test_data = load_public_test_csv("../data")
 
+    predictions = []
     c = 0 # correct
-    for i, correct in enumerate(valid_data["is_correct"]):
-        uid, qid = valid_data["user_id"][i], valid_data["question_id"][i]
+    for i, correct in enumerate(test_data["is_correct"]):
+        uid, qid = test_data["user_id"][i], test_data["question_id"][i]
 
-        if RF_trees[uid].predict([q_meta[qid]]) == correct:
+        p = RF_trees[uid].predict([q_meta[qid]])
+        predictions.append(p)
+        if p == correct:
             c += 1
-    print(c/len(valid_data["is_correct"]))
+    # print(c/len(test_data["is_correct"]))
+    return predictions
 
 if __name__ == "__main__":
     random_forest()
