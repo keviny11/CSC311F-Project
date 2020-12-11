@@ -11,13 +11,11 @@ import torch
 import sys
 import matplotlib.pyplot as plt
 from part_b.k_means_category import k_means_category
-from part_b.cosine_similarity import cosine_similarity_students
-from part_b.random_forest import random_forest
-
+from part_a.item_response import irt
+from part_a.item_response import evaluate as ir_eval
 
 def load_data(base_path="../data"):
     """ Load the data in PyTorch Tensor.
-
     :return: (zero_train_matrix, train_data, valid_data, test_data)
         WHERE:
         zero_train_matrix: 2D sparse matrix where missing entries are
@@ -36,16 +34,15 @@ def load_data(base_path="../data"):
     # Fill in the missing entries to 0.
     zero_train_matrix[np.isnan(train_matrix)] = 0
     # Change to Float Tensor for PyTorch.
+
     zero_train_matrix = torch.FloatTensor(zero_train_matrix)
     train_matrix = torch.FloatTensor(train_matrix)
 
     return zero_train_matrix, train_matrix, valid_data, test_data
 
-
 class AutoEncoder(nn.Module):
-    def __init__(self, num_question, k=64):
+    def __init__(self, num_question, k=32):
         """ Initialize a class AutoEncoder.
-
         :param num_question: int
         :param k: int
         """
@@ -59,7 +56,6 @@ class AutoEncoder(nn.Module):
 
     def get_weight_norm(self):
         """ Return ||W^1|| + ||W^2||.
-
         :return: float
         """
         g_w_norm = torch.norm(self.g.weight, 2)
@@ -70,7 +66,6 @@ class AutoEncoder(nn.Module):
 
     def forward(self, inputs):
         """ Return a forward pass given inputs.
-
         :param inputs: user vector.
         :return: user vector.
         """
@@ -85,7 +80,6 @@ class AutoEncoder(nn.Module):
 def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, test_data):
     """ Train the neural network, where the objective also includes
     a regularizer.
-
     :param model: Module
     :param lr: float
     :param lamb: float
@@ -148,12 +142,13 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
     # plt.show()
 
     print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
+    val_pred = evaluate(model, zero_train_data, valid_data, out=True)
+    test_pred = evaluate(model, zero_train_data, test_data, out=True)
+    return val_pred, test_pred
 
-    return evaluate(model, zero_train_data, test_data, out=True)
 
 def evaluate(model, train_data, valid_data, out=False):
     """ Evaluate the valid_data on the current model.
-
     :param model: Module
     :param train_data: 2D FloatTensor
     :param valid_data: A dictionary {user_id: list,
@@ -191,7 +186,35 @@ def eval_overall(predictions, valid_data):
         guess = predictions[i] >= 0.5
         if guess == t:
             correct += 1
-    print(correct/len(predictions))
+    # print("bagging accuracy", correct/len(predictions))
+    return correct/len(predictions)
+
+def bagging_auto (k,lr,lamb,num_epoch,num_auto):
+    base_path = "../data"
+    valid_data = load_valid_csv(base_path)
+    test_data = load_public_test_csv(base_path)
+    val_pred_all = np.zeros(len(valid_data['user_id']))
+    test_pred_all = np.zeros(len(test_data['user_id']))
+    for i in range (num_auto):
+        model = AutoEncoder(1774, k=k)
+        train_matrix = load_train_sparse(base_path).toarray()
+        zero_train_matrix = train_matrix.copy()
+        # Fill in the missing entries to 0.
+        zero_train_matrix[np.isnan(train_matrix)] = 0
+        # Change to Float Tensor for PyTorch.
+        zero_train_matrix = torch.FloatTensor(zero_train_matrix)
+        train_matrix = torch.FloatTensor(train_matrix)
+        val_pred, test_pred = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data)
+        val_pred_all += np.array(val_pred)
+        test_pred_all += np.array(test_pred)
+        print("autoencoder", i,"done")
+    avg_val_pred = val_pred_all/num_auto
+    avg_test_pred = test_pred_all / num_auto
+    val_acc = eval_overall(avg_val_pred, valid_data)
+    test_acc = eval_overall(avg_test_pred, test_data)
+    print('valid acc of ensemble autoencoder is', val_acc)
+    print('test acc of ensemble autoencoder is', test_acc)
+    return val_acc, test_acc
 
 def main():
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
@@ -218,34 +241,48 @@ def main():
     models = []
 
     model = AutoEncoder(1774, k=k)
-    pred_nn = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data)
 
-    # Bagging
-    bagged_pred = []
+######################## ensemble kmeans, item response and autoencoder
+    ## item response
+    train_data = load_train_csv("../data")
+    ir_lr = 0.05
+    iterations = 30
+    t, b, t_acc, v_acc, t_neg, v_neg, t_neg_avg, v_neg_avg, prob_t, prob_v = irt(train_data, valid_data, ir_lr, iterations)
+    prob_test = ir_eval(test_data, t, b)[1]
+    print('item response done')
+    # autoencoder
+    pred_nn_val, pred_nn_test = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch, test_data)
+    print('autoencoder done')
+    # k-means
+    val_pred_kmeans, val_acc_kmeans = k_means_category(5, valid_data)
+    test_pred_kmeans, test_acc_kmeans = k_means_category(5, test_data)
+    print('k-means done')
+    # ensemble
+    bagged_val_pred = (0.8*np.array(prob_v)+0.2*np.array(pred_nn_val)+0.0*np.array(val_pred_kmeans))
+    bag_val_acc = eval_overall(bagged_val_pred, valid_data)
+    print('bagged validation accuracy is', bag_val_acc)
+    bagged_test_pred = (0.8*np.array(prob_test)+0.2*np.array(pred_nn_test)+0.0*np.array(test_pred_kmeans))
+    bag_test_acc = eval_overall(bagged_test_pred, test_data)
+    print('bagged test accuracy is', bag_test_acc)
 
-    # pred_CS = cosine_similarity_students(threshold=1.0, top=2)
-    # for i, v in enumerate(pred_CS):
-    #     if v is None:
-    #         bagged_pred.append(pred_nn[i])
-    #     else:
-    #         bagged_pred.append(0.7*v+0.3*pred_nn[i])
-
-    # pred_kmeans, acc = k_means_category(200, test_data)
-    # for i, v in enumerate(pred_kmeans):
-    #     if v != 0:
-    #         bagged_pred.append(0.4*v+0.6*pred_nn[i])
-    #     else:
-    #         bagged_pred.append(pred_nn[i])
-
-    # pred_RF = random_forest()
-    # for i, v in enumerate(pred_RF):
-    #     bagged_pred.append(0.5*pred_RF[i]+0.5*pred_nn[i])
-    #
-    # eval_overall(bagged_pred, test_data)
-
+############### ensemble autoencoder
+    # num_auto = 3
+    # val_acc, test_acc = bagging_auto (k,lr,lamb,num_epoch,num_auto)
+    # return val_acc, test_acc
 
 if __name__ == "__main__":
+    # val_acc, test_acc = main()
     main()
     # k= 100, inner = 64, epoch = 30, lr = 0.05, lamb = 0.001, val 69.24, test 69.7%
     # k= 256, inner = 128, epoch = 30, lr = 0.05, lamb = 0.001, val 69.00, test 69.06%
     # k= 64, inner = 32, epoch = 30, lr = 0.05, lamb = 0.001, val 69.26, test 70.22%
+    # k = 128, inner = 64, 0.4, 0.6, val 69.37 test 69.71
+    # k = 128, inner 64, 0.3, 0.7, val 69.47 test 69.48
+    # k = 64, inner 32, 0.4, 0.6, val 69.12 test 69.68
+    # k = 64, inner 32, 0.6, 0.4, val 69.11 test 70.11
+    # k = 64, inner 32, 0.7, 0.3, val 69.53 test 69.94
+    # k = 64, inner 32, 0.8, 0.2, val 69.46 test 69.77
+    # k = 64, inner 32, 0.2, 0.8, val 69.39 test 70.16
+    # k = 64, inner 32, 0.2, 0.8, val 69.30 test 69.83
+
+    # 0.8 item response + 0.2 nn: val 70.54, test 70.90
