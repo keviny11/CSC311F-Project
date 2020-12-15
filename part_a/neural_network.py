@@ -149,6 +149,14 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
 
         print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
 
+    f = open("../before_loss.txt", "w")
+    np.savetxt(f, losses)
+    f.close()
+
+    f = open("../before_accuracy.txt", "w")
+    np.savetxt(f, accs)
+    f.close()
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -216,7 +224,7 @@ def main():
     lamb = 0
 
     train(model, lr, lamb, train_matrix, zero_train_matrix,
-          valid_data, num_epoch, test_data)
+          valid_data, num_epoch, test_data, out=True)
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################

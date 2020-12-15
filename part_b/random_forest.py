@@ -24,14 +24,14 @@ def random_forest():
     RF_trees = []
     for i, X in enumerate(RF_train_dat):
         y = RF_train_label[i]
-        clf = RandomForestClassifier(max_depth=2, random_state=0)
+        clf = RandomForestClassifier(n_estimators=15, max_depth=2, random_state=0)
         clf.fit(X, y)
         RF_trees.append(clf)
 
     return evaluate_RF(RF_trees, q_meta)
 
 def evaluate_RF(RF_trees, q_meta):
-    # valid_data = load_valid_csv("../data")
+    # test_data = load_valid_csv("../data")
     test_data = load_public_test_csv("../data")
 
     predictions = []
@@ -40,10 +40,11 @@ def evaluate_RF(RF_trees, q_meta):
         uid, qid = test_data["user_id"][i], test_data["question_id"][i]
 
         p = RF_trees[uid].predict([q_meta[qid]])
-        predictions.append(p)
+        predictions.append(p[0])
         if p == correct:
             c += 1
-    # print(c/len(test_data["is_correct"]))
+    print(c/len(test_data["is_correct"]))
+    print(predictions)
     return predictions
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ import torch
 import sys
 import matplotlib.pyplot as plt
 from part_b.k_means_category import k_means_category
+from part_b.random_forest import random_forest
 from part_a.item_response import irt
 from part_a.item_response import evaluate as ir_eval
 
@@ -141,6 +142,14 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch, t
     # plt.ylabel("Accuracy")
     # plt.show()
 
+    f = open("../after_loss.txt", "w")
+    np.savetxt(f, losses)
+    f.close()
+
+    f = open("../after_accuracy.txt", "w")
+    np.savetxt(f, accs)
+    f.close()
+
     print("Final Test Acc: {}".format(evaluate(model, zero_train_data, test_data)))
     val_pred = evaluate(model, zero_train_data, valid_data, out=True)
     test_pred = evaluate(model, zero_train_data, test_data, out=True)
@@ -230,7 +239,7 @@ def main():
 
     # Set optimization hyperparameters.
     lr = 0.05  # options explored: 0.1, 0.01, 0.005
-    num_epoch = 30
+    num_epoch = 35
 
     # lamb = 0.001: 68.90%(valid), 67.88(test)
     # lamb = 0.01: 68.25%(valid)

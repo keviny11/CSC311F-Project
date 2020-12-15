@@ -2,7 +2,9 @@ import numpy as np
 import pandas as pd
 from utils import *
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 import sys
+import matplotlib.pyplot as plt
 
 def gen_probability(clster):
 
@@ -21,7 +23,8 @@ def gen_probability(clster):
                 correct[q_meta_cat[i]] += 1
             total[q_meta_cat[i]] += 1
 
-        p = [correct[i]/total[i] if total[i] != 0 else 0 for i in range(len(total))]
+        guess = np.random.uniform()
+        p = [correct[i]/total[i] if total[i] != 0 else guess for i in range(len(total))]
 
         probability = []
         for i, _ in enumerate(r):
@@ -39,19 +42,35 @@ def q_meta_k_means(clstr):
         for sid in eval(row["subject_id"]):
             q_meta[int(index), int(sid)] = 1
 
-    kmeans = KMeans(n_clusters=clstr, random_state=0).fit(q_meta)
-    return kmeans.labels_
+    pca = PCA(2)
+    projected = pca.fit_transform(q_meta)
+    kmeans = KMeans(n_clusters=clstr, random_state=0).fit(projected)
+    labels = kmeans.labels_
+
+    plt.scatter(projected[:, 0], projected[:, 1],
+                c=labels, edgecolor='none', alpha=0.5,
+                cmap=plt.cm.get_cmap('Spectral', clstr))
+    plt.xlabel('component 1')
+    plt.ylabel('component 2')
+    plt.title("PCA and K-means analysis on question subject categorization")
+    # plt.show()
+    return labels
 
 def k_means_category(k, test):
     predictions = gen_probability(k)
     predictions_ = []
     total, correct = 0, 0
     for i, u in enumerate(test["user_id"]):
-
-        predictions_.append(predictions[u][test["question_id"][i]])
-        guess = predictions[u][test["question_id"][i]] >= 0.5
-        if guess == test["is_correct"][i]:
-            correct += 1
-        total += 1
+        if predictions[u][test["question_id"][i]] is not None:
+            predictions_.append(predictions[u][test["question_id"][i]])
+            guess = predictions[u][test["question_id"][i]] >= 0.5
+            if guess == test["is_correct"][i]:
+                correct += 1
+            total += 1
 
     return predictions_, correct / float(total)
+
+if __name__ == "__main__":
+    valid_data = load_valid_csv("../data")
+    test_data = load_public_test_csv("../data")
+    print(k_means_category(8, valid_data)[1])
