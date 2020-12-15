@@ -83,4 +83,26 @@ def main():
 
 if __name__ == "__main__":
     acc_user, acc_item, acc_user_test, acc_item_test = main()
-
+    # plot validation accuracy for user-based collaborative filtering
+    import matplotlib.pyplot as plt
+    plt.figure()
+    k = [1,6,11,16,21,26]
+    plt.plot(k, acc_user)
+    plt.plot(11,acc_user[2],'bo')
+    plt.title('KNN')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Number of k')
+    plt.legend(['KNN by User', 'Highest validation accuracy'], loc='lower right')
+    plt.xticks(np.arange(1, 27, 5))
+    plt.show()
+    # plot validation accuracy for item-based collaborative filtering
+    plt.figure()
+    k = [1,6,11,16,21,26]
+    plt.plot(k, acc_item)
+    plt.plot(21,acc_item[4],'bo')
+    plt.title('KNN')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Number of k')
+    plt.legend(['KNN by Item', 'Highest validation accuracy'], loc='lower right')
+    plt.xticks(np.arange(1, 27, 5))
+    plt.show()
