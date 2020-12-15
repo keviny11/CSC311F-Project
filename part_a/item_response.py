@@ -156,32 +156,12 @@ def main():
     import matplotlib.pyplot as plt
     # tune learning rate
     # lr = [0.001,0.005,0.01,0.05,0.1]
+    # choose learning rate = 0.01 and iteration = 30
     lr = [0.01]
     for i in range (len(lr)):
         iterations = 30
         t,b,t_acc, v_acc, t_neg, v_neg, t_neg_avg, v_neg_avg, prob_t, prob_v = irt(train_data, val_data, lr[i], iterations)
-        iter = np.linspace (0,iterations,iterations)
-        # plt.figure()
-        # # plt.plot(iter, t_acc)
-        # # plt.plot(iter, v_acc)
-        # plt.plot(iter, t_neg)
-        # plt.plot(iter, v_neg)
-        # plt.title('Negative log-likelihood v.s. Iteration')
-        # plt.ylabel('Negative log-likelihood')
-        # plt.xlabel('Number of Iteration')
-        # plt.legend(['Training', 'Validation'], loc='upper right')
-        # plt.xticks(np.arange(1, 31, 2))
-        # plt.show()
-        #
-        # plt.figure()
-        # plt.plot(iter, t_neg_avg)
-        # plt.plot(iter, v_neg_avg)
-        # plt.title('Average Negative log-likelihood v.s. Iteration')
-        # plt.ylabel('Average Negative log-likelihood')
-        # plt.xlabel('Number of Iteration')
-        # plt.legend(['Training', 'Validation'], loc='upper right')
-        # plt.xticks(np.arange(1, 31, 2))
-        # plt.show()
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -200,19 +180,54 @@ def main():
 
 if __name__ == "__main__":
     t,b,t_acc, v_acc, t_neg, v_neg, t_neg_avg, v_neg_avg, prob_t, prob_v, final_val_acc, final_test_acc  = main()
-    # import matplotlib.pyplot as plt
-    #
-    # plt.figure()
-    # # choose five questions
-    # for i in [10,20,30,40,50]:
-    #     x = t - b[i]
-    #     prob = sigmoid(x)
-    #     plt.scatter(t, prob,s=10.)
-    #     plt.title('Probability of correct response v.s. Theta')
-    #     plt.ylabel('Probability of correct response')
-    #     plt.xlabel('Theta')
-    #     plt.legend(['Question 1', 'Question 2', 'Question 3', 'Question 4', 'Question 5'], loc='lower right')
-    #     plt.show()
+    import matplotlib.pyplot as plt
+    iterations = 30
+    iter = np.linspace(0, iterations, iterations)
+
+    # plot training and validation negative log-likelihood
+    plt.figure()
+    plt.plot(iter, t_neg)
+    plt.plot(iter, v_neg)
+    plt.title('Negative log-likelihood v.s. Iteration')
+    plt.ylabel('Negative log-likelihood')
+    plt.xlabel('Number of Iteration')
+    plt.legend(['Training', 'Validation'], loc='upper right')
+    plt.xticks(np.arange(1, 31, 2))
+    plt.show()
+
+    # plot training and validation average negative log-likelihood
+    plt.figure()
+    plt.plot(iter, t_neg_avg)
+    plt.plot(iter, v_neg_avg)
+    plt.title('Average Negative log-likelihood v.s. Iteration')
+    plt.ylabel('Average Negative log-likelihood')
+    plt.xlabel('Number of Iteration')
+    plt.legend(['Training', 'Validation'], loc='upper right')
+    plt.xticks(np.arange(1, 31, 2))
+    plt.show()
+
+    # plot training and validation accuracy
+    plt.figure()
+    plt.plot(iter, t_acc)
+    plt.plot(iter, v_acc)
+    plt.title('Accuracy v.s. Iteration')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Number of Iteration')
+    plt.legend(['Training', 'Validation'], loc='upper right')
+    plt.xticks(np.arange(1, 31, 2))
+    plt.show()
+
+    # choose five questions to plot
+    plt.figure()
+    for i in [11, 50, 128, 369, 505]:
+        x = t - b[i]
+        prob = sigmoid(x)
+        plt.scatter(t, prob,s=10.)
+        plt.title('Probability of correct response v.s. Theta')
+        plt.ylabel('Probability of correct response')
+        plt.xlabel('Theta')
+        plt.legend(['Question 1', 'Question 2', 'Question 3', 'Question 4', 'Question 5'], loc='lower right')
+        plt.show()
 
 
 
